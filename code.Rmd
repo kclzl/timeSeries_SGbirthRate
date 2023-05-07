@@ -24,5 +24,80 @@ colSums(is.na(data))
 # plot
 #install.packages("ggplot2")
 library(ggplot2)
-plot(x = data$year, y = data$value, type = 'l')
+ggplot(data, aes(x = year, y = value, group = level_1, color = level_1)) +
+  geom_line() +
+  labs(title = "Line Plot of Three Categories", x = "Year", y = "Value", color = 'Type')
+```
+
+```{r keep only one column}
+# keep total fertility rate only
+fertilityRate = subset(data, level_1 == "Total Fertility Rate")
+fertilityRate = fertilityRate[, c(1,3)]
+plot(x = fertilityRate$year, y = fertilityRate$value, type = "l",
+     main = "Total Fertility Rate from 1960 to 2018",
+     xlab = "Per Female",
+     ylab = "Year")
+```
+
+```{r time series analysis of data1}
+# ACF and PACF of raw data1
+acf(fertilityRate[, c(2)])
+pacf(fertilityRate[, c(2)])
+```
+
+```{r detrend by applying exponential regression}
+# fit model
+x = 1:length(fertilityRate$value)
+y = fertilityRate$value
+m = lm(log(y)~x)
+summary(m)
+plot(fertilityRate, type = "l", main = "Total Fertility Rate", xlab = "Time", ylab = "Fertility Rate")
+
+# detrend the data
+predictions = exp(predict(m, newdata = fertilityRate))
+fertilityRate_detrended = fertilityRate - predictions
+plot(fertilityRate_detrended, type = "l", main = "Detrended Fertility Rate", xlab = "Time", ylab = "Detrend")
+
+# first difference
+firstDiff = diff(fertilityRate[, c(2)], difference = 1)
+plot(firstDiff, type = "l", main = "first difference")
+
+# second difference
+secDiff = diff(fertilityRate[, c(2)], difference = 2)
+plot(secDiff, type = "l", main = "second difference")
+```
+```{r check stationarity}
+# first difference
+#install.packages("tseries")
+library(tseries)
+adf.test(firstDiff)
+
+# second difference
+adf.test(secDiff)
+```
+
+```{r act and pacf of secDiff}
+acf(secDiff)
+pacf(secDiff)
+```
+```{r use GridSearch for hyperparameters}
+searchParams <- function(pList, dList, qList){
+  for (p in pList){
+    for (d in dList){
+      for (q in qList){
+        params = c(p, d, q)
+        model = arima(secDiff, order = params, include.mean = FALSE)
+        aic = AIC(model)
+        print(aic)
+      }
+    }
+  }
+}
+
+pList = c(0,1,2)
+dList = c(0,1,2)
+qList = c(0,1,2)
+
+
+searchParams(pList, dList, qList)
 ```
