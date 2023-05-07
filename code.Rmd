@@ -1,0 +1,28 @@
+---
+title: "time-series-proj"
+author: "Kyler Cheong"
+date: "2023-05-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Time Series Project
+
+This project I attempt to do a simple time series analysis of Singapore weather data. I attempt to predict the mean monthly temperature.
+
+```{r read data}
+data = read.csv("./data/data.csv")
+```
+
+```{r EDA}
+# check for null values
+colSums(is.na(data))
+
+# plot
+#install.packages("ggplot2")
+library(ggplot2)
+plot(x = data$year, y = data$value, type = 'l')
+```
