@@ -1,109 +1,47 @@
----
-title: "time-series-proj"
-author: "Kyler Cheong"
-date: "2023-05-06"
-output: html_document
----
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-
-## Time Series Project
-
-This project I attempt to do a simple time series analysis of Singapore weather data. I attempt to predict the mean monthly temperature.
-
-```{r read data}
-data = read.csv("./data/data.csv")
-```
-
-```{r EDA}
-# check for null values
-colSums(is.na(data))
-
-# plot
-#install.packages("ggplot2")
+# read data + EDA
+data = read.csv("./data/data.csv", header = TRUE)
 library(ggplot2)
 ggplot(data, aes(x = year, y = value, group = level_1, color = level_1)) +
   geom_line() +
   labs(title = "Line Plot of Three Categories", x = "Year", y = "Value", color = 'Type')
-```
 
-```{r keep only one column}
-# keep total fertility rate only
 fertilityRate = subset(data, level_1 == "Total Fertility Rate")
 fertilityRate = fertilityRate[, c(1,3)]
 plot(x = fertilityRate$year, y = fertilityRate$value, type = "l",
      main = "Total Fertility Rate from 1960 to 2018",
      xlab = "Per Female",
      ylab = "Year")
-```
-```{r train test split}
-train = fertilityRate[c(1:49),]
-test = fertilityRate[c(50:59),]
-#plot(train_fertilityRate, type = "l")
-#plot(test_fertilityRate, type = "l")
-```
 
-
-```{r time series analysis of data1}
 # ACF and PACF of raw data
-acf(train[, c(2)])
-pacf(train[, c(2)])
-```
+acf(fertilityRate[, c(2)])
+pacf(fertilityRate[, c(2)])
 
-```{r differencing}
-# first difference
-firstDiff = diff(train[, c(2)], difference = 1)
-plot(firstDiff, type = "l", main = "first difference")
-
-# second difference
-secDiff = diff(train[, c(2)], difference = 2)
-plot(secDiff, type = "l", main = "second difference")
-```
-```{r differencing of smoothed data}
 # log transformation
-log_train = log(train$value)
+log_fertilityRate = log(fertilityRate$value)
 
-# first difference
-log_train_firstDiff = diff(log_train, difference = 1)
-plot(log_train_firstDiff, type = "l", main = "first difference")
+# log first difference
+firstDiff_log = diff(log_fertilityRate, difference = 1)
+plot(firstDiff_log, type = "l", main = "first difference")
 
-# second difference
-log_train_secDiff = diff(log_train, difference = 2)
-plot(log_train_secDiff, type = "l", main = "second difference")
-```
-
-```{r check stationarity}
-# first difference
-#install.packages("tseries")
+# test stationarity
 library(tseries)
-adf.test(firstDiff)
-adf.test(secDiff)
-
 adf.test(firstDiff_log)
-adf.test(secDiff_log)
-```
 
-```{r act and pacf of secDiff}
-acf(secDiff)
-pacf(secDiff)
-
+# ACF and PACF of log firstDiff
 acf(firstDiff_log)
 pacf(firstDiff_log)
-```
-```{r periodogram}
+
+# Periodogram
 spec <- spec.pgram(firstDiff_log, taper = 0, log = "no", spans = 2)
 plot(spec$freq, spec$spec, type = "l", xlab = "Frequency", ylab = "Periodogram")
 
 max_index <- which.max(spec$spec)
 max_freq <- spec$freq[max_index]
 
-# Calculate the period
 period <- 1/max_freq
-```
+period
 
-```{r use GridSearch for hyperparameters}
+# searchParamsARIMA
 searchParamsARIMA <- function(pList, dList, qList, metric, ts){
   bestScore <- 0
   bestParams <- c(0,0,0)
@@ -126,29 +64,6 @@ searchParamsARIMA <- function(pList, dList, qList, metric, ts){
   print(msg)
 }
 
-# test code
-# pList = c(0,1,2)
-# dList = c(0,1,2)
-# qList = c(0,1,2)
-# 
-# searchParamsARIMA(pList, dList, qList)
-```
-
-``` {r search best params}
-# params
-pList = c(11,12,13)
-dList = c(1)
-qList = c(12,13)
-m = AIC
-ts = firstDiff_log
-# aic model
-searchParamsARIMA(pList, dList, qList, metric = m, ts)
-# bic model
-m = BIC
-searchParamsARIMA(pList, dList, qList, metric = m, ts)
-```
-
-```{r SARIMA model}
 # searchParamsSARIMA
 searchParamsSARIMA <- function(pList, dList, qList, PList, DList, QList, sList, metric, ts){
   bestScore <- 0
@@ -187,10 +102,13 @@ searchParamsSARIMA <- function(pList, dList, qList, PList, DList, QList, sList, 
   print(msg)
 }
 
-# test code
 # params
-pList = c(11, 12, 13); dList = c(1); qList = c(12,13)
-PList = c(11,12,13); DList = c(1); QList = c(12,13)
+pList = c(11,12,13)
+dList = c(1)
+qList = c(12,13)
+PList = c(11, 12, 13)
+DList = c(1)
+QList = c(11, 12)
 sList = c(1)
 m = AIC
 ts = firstDiff_log
@@ -199,24 +117,7 @@ searchParamsSARIMA(pList, dList, qList, PList, DList, QList, sList, metric = m, 
 # bic model
 m = BIC
 searchParamsSARIMA(pList, dList, qList, PList, DList, QList, sList, metric = m, ts)
-```
 
-```{r build model, evaluate model appropriateness}
-bestModel = arima(secDiff, order = c(3,1,10), include.mean = FALSE)
 
-acf(bestModel$residual ,col='red')
-pacf(bestModel$residual ,col='red')
-tsdiag(bestModel)
-hist(bestModel$residual,col='darkorange')
-qqnorm(bestModel$residual ,col='red')
 
-```
-
-```{r forecasting}
-# install.packages("forecast")
-library(forecast)
-forecasts = forecast(bestModel, h = 5)
-forecasts_orig = c(NA, firstDiff_log) + cumsum(forecasts$mean)
-plot(forecasts_orig)
-```
 
