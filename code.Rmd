@@ -30,7 +30,7 @@ ggplot(data, aes(x = year, y = value, group = level_1, color = level_1)) +
 ```
 
 ```{r keep only one column}
-# keep total fertility rate only
+# total fertility rate
 fertilityRate = subset(data, level_1 == "Total Fertility Rate")
 fertilityRate = fertilityRate[, c(1,3)]
 plot(x = fertilityRate$year, y = fertilityRate$value, type = "l",
@@ -39,8 +39,8 @@ plot(x = fertilityRate$year, y = fertilityRate$value, type = "l",
      ylab = "Year")
 ```
 ```{r train test split}
-train = fertilityRate[c(1:49),]
-test = fertilityRate[c(50:59),]
+train = fertilityRate[c(1:54),]
+test = fertilityRate[c(55:59),]
 #plot(train_fertilityRate, type = "l")
 #plot(test_fertilityRate, type = "l")
 ```
@@ -54,13 +54,14 @@ pacf(train[, c(2)])
 
 ```{r differencing}
 # first difference
-firstDiff = diff(train[, c(2)], difference = 1)
-plot(firstDiff, type = "l", main = "first difference")
+train_firstDiff = diff(train[, c(2)], difference = 1)
+plot(train_firstDiff, type = "l", main = "first difference")
 
 # second difference
-secDiff = diff(train[, c(2)], difference = 2)
-plot(secDiff, type = "l", main = "second difference")
+# secDiff = diff(train[, c(2)], difference = 2)
+# plot(secDiff, type = "l", main = "second difference")
 ```
+
 ```{r differencing of smoothed data}
 # log transformation
 log_train = log(train$value)
@@ -78,22 +79,20 @@ plot(log_train_secDiff, type = "l", main = "second difference")
 # first difference
 #install.packages("tseries")
 library(tseries)
-adf.test(firstDiff)
-adf.test(secDiff)
-
-adf.test(firstDiff_log)
-adf.test(secDiff_log)
+adf.test(train_firstDiff)
+adf.test(log_train_firstDiff)
 ```
 
-```{r act and pacf of secDiff}
-acf(secDiff)
-pacf(secDiff)
+Time series used is the first difference of the log transformed data.
 
-acf(firstDiff_log)
-pacf(firstDiff_log)
+
+```{r act and pacf of firstDiff}
+acf(log_train_firstDiff)
+pacf(log_train_firstDiff)
 ```
+
 ```{r periodogram}
-spec <- spec.pgram(firstDiff_log, taper = 0, log = "no", spans = 2)
+spec <- spec.pgram(log_train_firstDiff, taper = 0, log = "no")
 plot(spec$freq, spec$spec, type = "l", xlab = "Frequency", ylab = "Periodogram")
 
 max_index <- which.max(spec$spec)
@@ -103,7 +102,7 @@ max_freq <- spec$freq[max_index]
 period <- 1/max_freq
 ```
 
-```{r use GridSearch for hyperparameters}
+```{r use GridSearch for hyperparameters ARIMA}
 searchParamsARIMA <- function(pList, dList, qList, metric, ts){
   bestScore <- 0
   bestParams <- c(0,0,0)
@@ -127,20 +126,19 @@ searchParamsARIMA <- function(pList, dList, qList, metric, ts){
 }
 
 # test code
-# pList = c(0,1,2)
-# dList = c(0,1,2)
-# qList = c(0,1,2)
-# 
-# searchParamsARIMA(pList, dList, qList)
+# pList = c(0,1,2); dList = c(0,1,2); qList = c(0,1,2)
+# metric = AIC
+# ts = log_train_firstDiff
+# searchParamsARIMA(pList, dList, qList, metric, ts)
 ```
 
 ``` {r search best params}
 # params
-pList = c(11,12,13)
+pList = c(0:2)
 dList = c(1)
-qList = c(12,13)
+qList = c(0:2)
 m = AIC
-ts = firstDiff_log
+ts = log_train_firstDiff
 # aic model
 searchParamsARIMA(pList, dList, qList, metric = m, ts)
 # bic model
@@ -189,11 +187,11 @@ searchParamsSARIMA <- function(pList, dList, qList, PList, DList, QList, sList, 
 
 # test code
 # params
-pList = c(11, 12, 13); dList = c(1); qList = c(12,13)
-PList = c(11,12,13); DList = c(1); QList = c(12,13)
+pList = c(0:2); dList = c(1); qList = c(0:2)
+PList = c(0); DList = c(1); QList = c(0)
 sList = c(1)
 m = AIC
-ts = firstDiff_log
+ts = log_train_firstDiff
 # aic model
 searchParamsSARIMA(pList, dList, qList, PList, DList, QList, sList, metric = m, ts)
 # bic model
@@ -202,7 +200,7 @@ searchParamsSARIMA(pList, dList, qList, PList, DList, QList, sList, metric = m, 
 ```
 
 ```{r build model, evaluate model appropriateness}
-bestModel = arima(secDiff, order = c(3,1,10), include.mean = FALSE)
+bestModel = arima(log_train_firstDiff, order = c(0,1,1), include.mean = FALSE)
 
 acf(bestModel$residual ,col='red')
 pacf(bestModel$residual ,col='red')
@@ -216,7 +214,40 @@ qqnorm(bestModel$residual ,col='red')
 # install.packages("forecast")
 library(forecast)
 forecasts = forecast(bestModel, h = 5)
-forecasts_orig = c(NA, firstDiff_log) + cumsum(forecasts$mean)
-plot(forecasts_orig)
+plot(forecasts)
 ```
+```{r plot into original timeseries}
+x1 = fertilityRate$year
+y1 = fertilityRate$value
 
+# forecast
+fore0 = exp(tail(log_train_firstDiff, 1) + cumsum(forecasts$mean))
+y2 = c(y1[1:length(train$value)], fore0)
+
+fore97.5 = exp(tail(log_train_firstDiff, 1) + cumsum(forecasts$upper[, c(2)]))
+fore2.5 = exp(tail(log_train_firstDiff, 1) + cumsum(forecasts$lower[, c(2)]))
+y3 = c(y1[1:length(train$value)], fore97.5)
+y4 = c(y1[1:length(train$value)], fore2.5)
+
+fore90 = exp(tail(log_train_firstDiff, 1) + cumsum(forecasts$upper[, c(1)]))
+fore10 = exp(tail(log_train_firstDiff, 1) + cumsum(forecasts$lower[, c(1)]))
+y5 = c(y1[1:length(train$value)], fore90)
+y6 = c(y1[1:length(train$value)], fore10)
+
+# plot
+plot(x1, y2, ylim = c(0,max(y1)), type = "l", col = "red",
+     main = "Actual vs Forecasted",
+     xlab = "Fertility Rate",
+     ylab = "Year")
+lines(x1, y3, type = "l", col = "gold")
+lines(x1, y4, type = "l", col = "gold")
+lines(x1, y5, type = "l", col = "orange")
+lines(x1, y6, type = "l", col = "orange")
+lines(x1, y1, type = "l", col = "blue")
+
+legend(x = "topright",
+       inset = 0.05,
+       title = "Legend",
+       legend = c("Actual", "Forecast", "80% C.I.", "95% C.I."),
+       fill = c("blue", "red", "orange", "gold"))
+```

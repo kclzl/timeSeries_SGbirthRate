@@ -1,47 +1,64 @@
-# read data + EDA
-data = read.csv("./data/data.csv", header = TRUE)
+############################
+# Code                     #
+#    1. EDA                #
+#    2. Data Preprocessing #
+#    3. AMIRA Model        #
+#    4. Forecasting        #
+############################
+
+#######
+# EDA #
+#######
+
+# Read Data
+data = read.csv("./data/data.csv")
+
+#install.packages("ggplot2")
 library(ggplot2)
 ggplot(data, aes(x = year, y = value, group = level_1, color = level_1)) +
   geom_line() +
   labs(title = "Line Plot of Three Categories", x = "Year", y = "Value", color = 'Type')
 
+# Fertility rate
 fertilityRate = subset(data, level_1 == "Total Fertility Rate")
 fertilityRate = fertilityRate[, c(1,3)]
 plot(x = fertilityRate$year, y = fertilityRate$value, type = "l",
      main = "Total Fertility Rate from 1960 to 2018",
-     xlab = "Per Female",
-     ylab = "Year")
+     xlab = "Year",
+     ylab = "Per Female",
+     col = "blue")
 
 # ACF and PACF of raw data
-acf(fertilityRate[, c(2)])
-pacf(fertilityRate[, c(2)])
+acf(train[, c(2)], main = "ACF (Raw Data)", col = "red")
+pacf(train[, c(2)], main = "PACF (Raw Data)", col = "red")
+
+######################
+# Data Preprocessing #
+######################
+
+# first difference
+train_firstDiff = diff(train[, c(2)], difference = 1)
+plot(train_firstDiff, type = "l", main = "First difference", ylab = "Differenced", col = "blue")
 
 # log transformation
-log_fertilityRate = log(fertilityRate$value)
+log_train = log(train$value)
+log_train_firstDiff = diff(log_train, difference = 1)
+plot(log_train_firstDiff, type = "l", main = "First difference (log)", ylab = "Differenced", col = "blue")
 
-# log first difference
-firstDiff_log = diff(log_fertilityRate, difference = 1)
-plot(firstDiff_log, type = "l", main = "first difference")
+# ACF and PACF of first difference (log)
+acf(log_train_firstDiff, main = "ACF (Transformed Data)", col = "red")
+pacf(log_train_firstDiff, main = "PACF (Transformed Data)", col = "red")
 
-# test stationarity
+# check stationarity
+#install.packages("tseries")
 library(tseries)
-adf.test(firstDiff_log)
+adf.test(log_train_firstDiff)
 
-# ACF and PACF of log firstDiff
-acf(firstDiff_log)
-pacf(firstDiff_log)
+###############
+# ARIMA Model #
+###############
 
-# Periodogram
-spec <- spec.pgram(firstDiff_log, taper = 0, log = "no", spans = 2)
-plot(spec$freq, spec$spec, type = "l", xlab = "Frequency", ylab = "Periodogram")
-
-max_index <- which.max(spec$spec)
-max_freq <- spec$freq[max_index]
-
-period <- 1/max_freq
-period
-
-# searchParamsARIMA
+# Function to search for optimal parameters
 searchParamsARIMA <- function(pList, dList, qList, metric, ts){
   bestScore <- 0
   bestParams <- c(0,0,0)
@@ -64,60 +81,64 @@ searchParamsARIMA <- function(pList, dList, qList, metric, ts){
   print(msg)
 }
 
-# searchParamsSARIMA
-searchParamsSARIMA <- function(pList, dList, qList, PList, DList, QList, sList, metric, ts){
-  bestScore <- 0
-  bestParams <- c(0,0,0,0,0,0,0)
-  metric = metric
-  for (p in pList){
-    for (d in dList){
-      for (q in qList){
-        for (P in PList){
-          for (D in DList){
-            for (Q in QList){
-              for (s in sList){
-                params = c(p, d, q)
-                seasons = c(P, D, Q)
-                periods = s
-                sModel = arima(ts, order = params, seasonal = list(order = seasons, period = periods))
-                score = metric(sModel)
-                if (score < bestScore) {
-                  bestScore = score
-                  bestParams = c(p,d,q)
-                  bestSeasons = c(P, D, Q)
-                  bestPeriod = s
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  msg <- sprintf("Best Params (p, d, q, P, D, Q, s): %d, %d, %d, %d, %d, %d, %d with score of %0.3f",
-                 bestParams[1], bestParams[2], bestParams[3],
-                 bestSeasons[1], bestSeasons[2], bestSeasons[3],
-                 bestPeriod = s,
-                 bestScore)
-  print(msg)
-}
-
-# params
-pList = c(11,12,13)
+# search for best parameters
+pList = c(0:2)
 dList = c(1)
-qList = c(12,13)
-PList = c(11, 12, 13)
-DList = c(1)
-QList = c(11, 12)
-sList = c(1)
+qList = c(0:2)
+ts = log_train_firstDiff
+
+# metrics
 m = AIC
-ts = firstDiff_log
-# aic model
-searchParamsSARIMA(pList, dList, qList, PList, DList, QList, sList, metric = m, ts)
-# bic model
+searchParamsARIMA(pList, dList, qList, metric = m, ts)
 m = BIC
-searchParamsSARIMA(pList, dList, qList, PList, DList, QList, sList, metric = m, ts)
+searchParamsARIMA(pList, dList, qList, metric = m, ts)
 
+# Model Evaluation
+bestModel = arima(log_train_firstDiff, order = c(0,1,1), include.mean = FALSE)
 
+acf(bestModel$residual ,main = "ACF of Residuals", col='red')
+pacf(bestModel$residual ,main = "PACF of Residuals", col='red')
+tsdiag(bestModel)
+hist(bestModel$residual, main = "Histogram of Residuals", col='orange')
+qqnorm(bestModel$residual, main = "Normal Q-Q Plot of Residuals", col='red')
 
+###############
+# Forecasting #
+###############
 
+# install.packages("forecast")
+library(forecast)
+forecasts = forecast(bestModel, h = 5)
+
+# Plot forecasts
+x1 = fertilityRate$year
+y1 = fertilityRate$value
+
+fore0 = exp(tail(log_train_firstDiff, 1) + cumsum(forecasts$mean))
+y2 = c(y1[1:length(train$value)], fore0)
+
+fore97.5 = exp(tail(log_train_firstDiff, 1) + cumsum(forecasts$upper[, c(2)]))
+fore2.5 = exp(tail(log_train_firstDiff, 1) + cumsum(forecasts$lower[, c(2)]))
+y3 = c(y1[1:length(train$value)], fore97.5)
+y4 = c(y1[1:length(train$value)], fore2.5)
+
+fore90 = exp(tail(log_train_firstDiff, 1) + cumsum(forecasts$upper[, c(1)]))
+fore10 = exp(tail(log_train_firstDiff, 1) + cumsum(forecasts$lower[, c(1)]))
+y5 = c(y1[1:length(train$value)], fore90)
+y6 = c(y1[1:length(train$value)], fore10)
+
+plot(x1, y2, ylim = c(0,max(y1)), type = "l", col = "red",
+     main = "Actual vs Forecasted",
+     xlab = "Fertility Rate",
+     ylab = "Year")
+lines(x1, y3, type = "l", col = "gold")
+lines(x1, y4, type = "l", col = "gold")
+lines(x1, y5, type = "l", col = "orange")
+lines(x1, y6, type = "l", col = "orange")
+lines(x1, y1, type = "l", col = "blue")
+
+legend(x = "topright",
+       inset = 0.05,
+       title = "Legend",
+       legend = c("Actual", "Forecast", "80% C.I.", "95% C.I."),
+       fill = c("blue", "red", "orange", "gold"))
