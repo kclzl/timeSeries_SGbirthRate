@@ -99,6 +99,7 @@ bestModel = arima(log_train_firstDiff, order = c(0,1,1), include.mean = FALSE)
 acf(bestModel$residual ,main = "ACF of Residuals", col='red')
 pacf(bestModel$residual ,main = "PACF of Residuals", col='red')
 tsdiag(bestModel)
+checkresiduals(bestModel)
 hist(bestModel$residual, main = "Histogram of Residuals", col='orange')
 qqnorm(bestModel$residual, main = "Normal Q-Q Plot of Residuals", col='red')
 
@@ -138,6 +139,24 @@ lines(x1, y6, type = "l", col = "orange")
 lines(x1, y1, type = "l", col = "blue")
 
 legend(x = "topright",
+       inset = 0.05,
+       title = "Legend",
+       legend = c("Actual", "Forecast", "80% C.I.", "95% C.I."),
+       fill = c("blue", "red", "orange", "gold"))
+
+# plot from 2010 onwards (magnified view)
+plot(x1, y2, xlim = c(2010, 2018), ylim = c(0,2), type = "l", col = "red",
+     main = "Actual vs Forecasted (Magnified)",
+     xlab = "Fertility Rate",
+     ylab = "Year")
+lines(x1, y3, type = "l", col = "gold")
+lines(x1, y4, type = "l", col = "gold")
+lines(x1, y5, type = "l", col = "orange")
+lines(x1, y6, type = "l", col = "orange")
+lines(x1, y1, type = "l", col = "blue")
+
+legend(x = "topleft",
+       cex = 0.5,
        inset = 0.05,
        title = "Legend",
        legend = c("Actual", "Forecast", "80% C.I.", "95% C.I."),

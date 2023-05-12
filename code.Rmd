@@ -58,13 +58,14 @@ train_firstDiff = diff(train[, c(2)], difference = 1)
 plot(train_firstDiff, type = "l", main = "first difference")
 
 # second difference
-# secDiff = diff(train[, c(2)], difference = 2)
-# plot(secDiff, type = "l", main = "second difference")
+secDiff = diff(train[, c(2)], difference = 2)
+plot(secDiff, type = "l", main = "second difference")
 ```
 
 ```{r differencing of smoothed data}
 # log transformation
 log_train = log(train$value)
+plot(log_train, type = "l", main = "Transformed Data (log)", col = "blue")
 
 # first difference
 log_train_firstDiff = diff(log_train, difference = 1)
@@ -81,6 +82,7 @@ plot(log_train_secDiff, type = "l", main = "second difference")
 library(tseries)
 adf.test(train_firstDiff)
 adf.test(log_train_firstDiff)
+adf.test(secDiff)
 ```
 
 Time series used is the first difference of the log transformed data.
