@@ -42,6 +42,7 @@ plot(train_firstDiff, type = "l", main = "First difference", ylab = "Differenced
 
 # log transformation
 log_train = log(train$value)
+plot(log_train, type = "l", main = "Transformed Data (log)", ylab = "log", col = "blue")
 log_train_firstDiff = diff(log_train, difference = 1)
 plot(log_train_firstDiff, type = "l", main = "First difference (log)", ylab = "Differenced", col = "blue")
 
@@ -94,6 +95,7 @@ m = BIC
 searchParamsARIMA(pList, dList, qList, metric = m, ts)
 
 # Model Evaluation
+library(forecast)
 bestModel = arima(log_train_firstDiff, order = c(0,1,1), include.mean = FALSE)
 
 acf(bestModel$residual ,main = "ACF of Residuals", col='red')
@@ -102,6 +104,10 @@ tsdiag(bestModel)
 checkresiduals(bestModel)
 hist(bestModel$residual, main = "Histogram of Residuals", col='orange')
 qqnorm(bestModel$residual, main = "Normal Q-Q Plot of Residuals", col='red')
+
+# extract coefficients
+coeff <- coef(bestModel)
+coeff
 
 ###############
 # Forecasting #
@@ -161,3 +167,99 @@ legend(x = "topleft",
        title = "Legend",
        legend = c("Actual", "Forecast", "80% C.I.", "95% C.I."),
        fill = c("blue", "red", "orange", "gold"))
+
+#####################
+# White Noise Model #
+#####################
+
+wn_mean = mean(log_train_firstDiff)
+wn_sd = sd(log_train_firstDiff)
+wn_model = arima.sim(model = list(order = c(0, 0, 0)), n = 5, mean = wn_mean, sd = wn_sd)
+#plot(wn_model)
+
+forecasts_wn = forecast(wn_model, h = 5)
+
+# Plot forecasts
+x1 = fertilityRate$year
+y1 = fertilityRate$value
+
+fore0 = exp(tail(log_train_firstDiff, 1) + cumsum(forecasts_wn$mean))
+y2 = c(y1[1:length(train$value)], fore0)
+
+fore97.5 = exp(tail(log_train_firstDiff, 1) + cumsum(forecasts_wn$upper[, c(2)]))
+fore2.5 = exp(tail(log_train_firstDiff, 1) + cumsum(forecasts_wn$lower[, c(2)]))
+y3 = c(y1[1:length(train$value)], fore97.5)
+y4 = c(y1[1:length(train$value)], fore2.5)
+
+fore90 = exp(tail(log_train_firstDiff, 1) + cumsum(forecasts_wn$upper[, c(1)]))
+fore10 = exp(tail(log_train_firstDiff, 1) + cumsum(forecasts_wn$lower[, c(1)]))
+y5 = c(y1[1:length(train$value)], fore90)
+y6 = c(y1[1:length(train$value)], fore10)
+
+# plot from 2010 onwards (magnified view)
+plot(x1, y2, xlim = c(2010, 2018), ylim = c(0,2), type = "l", col = "darkgreen",
+     main = "Actual vs Forecasted (Magnified)",
+     xlab = "Fertility Rate",
+     ylab = "Year")
+lines(x1, y3, type = "l", col = "lightgreen")
+lines(x1, y4, type = "l", col = "lightgreen")
+lines(x1, y5, type = "l", col = "green")
+lines(x1, y6, type = "l", col = "green")
+lines(x1, y1, type = "l", col = "blue")
+
+legend(x = "topleft",
+       cex = 0.5,
+       inset = 0.05,
+       title = "Legend",
+       legend = c("Actual", "Forecast", "80% C.I.", "95% C.I."),
+       fill = c("blue", "red", "darkgreen", "lightgreen"))
+
+
+#################################
+# WN compared to ARIMA(0, 1, 1) #
+#################################
+
+forecasts_wn = forecast(wn_model, h = 5)
+forecasts_arima = forecast(bestModel, h = 5)
+
+# Plot forecasts
+x1 = fertilityRate$year
+y1 = fertilityRate$value
+
+fore_wn = exp(tail(log_train_firstDiff, 1) + cumsum(forecasts_wn$mean))
+y2 = c(y1[1:length(train$value)], fore_wn)
+
+fore_arima = exp(tail(log_train_firstDiff, 1) + cumsum(forecasts_arima$mean))
+y3 = c(y1[1:length(train$value)], fore_arima)
+
+plot(x1, y2, ylim = c(0,max(y1)), type = "l", col = "red",
+     main = "Actual vs Forecasted",
+     xlab = "Fertility Rate",
+     ylab = "Year")
+lines(x1, y3, type = "l", col = "green")
+lines(x1, y1, type = "l", col = "blue")
+
+legend(x = "topright",
+       cex = 0.5,
+       inset = 0.05,
+       title = "Legend",
+       legend = c("White Noise", "ARIMA(0, 1, 1)", "Actual"),
+       fill = c("red", "green", "blue"))
+
+# plot magnified forecasts
+plot(x1, y2, xlim = c(2010, 2018), ylim = c(0,2), type = "l", col = "red",
+     main = "Actual vs Forecasted (Magnified)",
+     xlab = "Fertility Rate",
+     ylab = "Year")
+lines(x1, y3, type = "l", col = "green")
+lines(x1, y1, type = "l", col = "blue")
+
+legend(x = "topleft",
+       cex = 0.5,
+       inset = 0.05,
+       title = "Legend",
+       legend = c("White Noise", "ARIMA(0, 1, 1)", "Actual"),
+       fill = c("red", "green", "blue"))
+
+# plot magnified forecasts for the time intervals
+plot(forecasts_wn$model)
