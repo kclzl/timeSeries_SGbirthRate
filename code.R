@@ -106,8 +106,7 @@ hist(bestModel$residual, main = "Histogram of Residuals", col='orange')
 qqnorm(bestModel$residual, main = "Normal Q-Q Plot of Residuals", col='red')
 
 # extract coefficients
-coeff <- coef(bestModel)
-coeff
+bestModel
 
 ###############
 # Forecasting #
@@ -260,6 +259,3 @@ legend(x = "topleft",
        title = "Legend",
        legend = c("White Noise", "ARIMA(0, 1, 1)", "Actual"),
        fill = c("red", "green", "blue"))
-
-# plot magnified forecasts for the time intervals
-plot(forecasts_wn$model)
